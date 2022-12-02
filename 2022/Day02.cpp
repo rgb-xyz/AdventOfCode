@@ -1,4 +1,5 @@
 #include <fstream>
+#include <iostream>
 
 // ********************************************************************************************************
 
@@ -31,9 +32,7 @@ int solve2(std::ifstream input) {
 
 int main() {
     const std::string inputFile = "inputs/input02.txt";
-    const int64_t result1 = solve1(std::ifstream(inputFile));
-    printf("%lld\n", result1);
-    const int64_t result2 = solve2(std::ifstream(inputFile));
-    printf("%lld\n", result2);
+    std::cout << solve1(std::ifstream(inputFile)) << std::endl;
+    std::cout << solve2(std::ifstream(inputFile)) << std::endl;
     return 0;
 }
