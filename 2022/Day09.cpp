@@ -1,22 +1,14 @@
 #include <fstream>
 #include <iostream>
-#include <unordered_set>
+#include <set>
+#include <vector>
 
 struct Pos {
     int x = 0;
     int y = 0;
 
-    bool operator==(const Pos&) const = default;
+    auto operator<=>(const Pos&) const = default;
 };
-
-namespace std {
-    template<>
-    struct std::hash<Pos> {
-        size_t operator()(const Pos& pos) const {
-            return std::hash<size_t>{}((size_t(pos.x) << 32) + size_t(pos.x));
-        }
-    };
-}
 
 // ********************************************************************************************************
 
@@ -27,8 +19,8 @@ int solve(std::ifstream input, const int length) {
 
     char dir{};
     int  steps{};
-    std::vector<Pos>        knots(length);
-    std::unordered_set<Pos> positions;
+    std::vector<Pos> knots(length);
+    std::set<Pos>    positions;
     positions.insert(knots.back());
     while (input >> dir >> steps) {
         for (; steps > 0; --steps) {
