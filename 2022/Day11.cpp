@@ -16,46 +16,28 @@ struct Monkey {
     int                counter       = 0;
 
     void parse(std::istream& input) {
-        std::string line;
-        if (!std::getline(input, line) || !line.starts_with("  Starting items: ")) {
+        const auto getLine = [&input](const std::string_view& prefix) {
+            std::string line;
+            if (std::getline(input, line) && line.starts_with(prefix)) {
+                return line.substr(prefix.size());
+            }
             std::terminate();
-        }
-        std::istringstream iss(line.substr(18));
-        int item{};
-        while (iss >> item) {
+        };
+
+        std::istringstream iss(getLine("  Starting items: "));
+        for (int item{}; iss >> item; iss.get()) {
             items.push_back(item);
-            if (iss.get() != ',') {
-                break;
-            }
         }
-        if (!std::getline(input, line) || !line.starts_with("  Operation: new = old ")) {
-            std::terminate();
+        const std::string op = getLine("  Operation: new = old ");
+        argument = std::atoi(op.c_str() + 1);
+        switch (op[0]) {
+        case '+': operation = Operation::ADD;                                break;
+        case '*': operation = argument ? Operation::MUL : Operation::SQUARE; break;
+        default:  std::terminate();
         }
-        if (line[23] == '+') {
-            operation = Operation::ADD;
-            argument = atoi(line.c_str() + 25);
-        } else if (line[23] == '*') {
-            if (line.substr(25) == "old") {
-                operation = Operation::SQUARE;
-            } else {
-                operation = Operation::MUL;
-                argument = atoi(line.c_str() + 25);
-            }
-        } else {
-            std::terminate();
-        }
-        if (!std::getline(input, line) || !line.starts_with("  Test: divisible by ")) {
-            std::terminate();
-        }
-        divisor = atoi(line.c_str() + 21);
-        if (!std::getline(input, line) || !line.starts_with("    If true: throw to monkey ")) {
-            std::terminate();
-        }
-        nextMonkey[0] = atoi(line.c_str() + 29);
-        if (!std::getline(input, line) || !line.starts_with("    If false: throw to monkey ")) {
-            std::terminate();
-        }
-        nextMonkey[1] = atoi(line.c_str() + 30);
+        divisor       = std::stoi(getLine("  Test: divisible by "));
+        nextMonkey[0] = std::stoi(getLine("    If true: throw to monkey "));
+        nextMonkey[1] = std::stoi(getLine("    If false: throw to monkey "));
     }
 };
 
@@ -84,7 +66,6 @@ int64_t solve(std::ifstream input, const int rounds, const bool reduce) {
                 case Monkey::Operation::ADD:    item += monkey.argument; break;
                 case Monkey::Operation::MUL:    item *= monkey.argument; break;
                 case Monkey::Operation::SQUARE: item *= item;            break;
-                default: std::terminate();
                 }
                 if (reduce) {
                     item /= 3;
@@ -97,7 +78,7 @@ int64_t solve(std::ifstream input, const int rounds, const bool reduce) {
         }
     }
     std::sort(monkeys.begin(), monkeys.end(),
-              [](const auto& m1, const auto& m2) { return m1.counter > m2.counter; });
+              [](const Monkey& m1, const Monkey& m2) { return m1.counter > m2.counter; });
     return int64_t(monkeys[0].counter) * int64_t(monkeys[1].counter);
 }
 
