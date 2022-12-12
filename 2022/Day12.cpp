@@ -4,14 +4,24 @@
 #include <string>
 #include <vector>
 
-struct Site {
-    char height{};
-    int  steps = INT_MAX;
-};
+#define PLOT_TRAIL
 
 struct Pos {
     int x = 0;
     int y = 0;
+};
+
+struct Site {
+    char height{};
+    int  steps = INT_MAX;
+
+#ifdef PLOT_TRAIL
+    struct {
+        char height{};
+        bool isOnTrail = false;
+        Pos  backtrace;
+    } trailPlot;
+#endif
 };
 
 // ********************************************************************************************************
@@ -27,6 +37,9 @@ int solve(std::ifstream input, const bool includeAll) {
         for (int x = 0; x < int(line.size()); ++x) {
             Site site;
             site.height = line[x];
+#ifdef PLOT_TRAIL
+            site.trailPlot.height = line[x];
+#endif
             if (site.height == 'S' || (includeAll && site.height == 'a')) {
                 site.height = 'a';
                 site.steps  = 0;
@@ -51,6 +64,9 @@ int solve(std::ifstream input, const bool includeAll) {
                 Site& nextSite = grid[nextY][nextX];
                 if (nextSite.height <= site.height + 1 && nextSite.steps > site.steps + 1) {
                     nextSite.steps = site.steps + 1;
+#ifdef PLOT_TRAIL
+                    nextSite.trailPlot.backtrace = pos;
+#endif
                     queue.push_back(Pos{ nextX, nextY });
                 }
             }
@@ -60,6 +76,25 @@ int solve(std::ifstream input, const bool includeAll) {
         checkNextSite( 0, -1);
         checkNextSite( 0, +1);
     }
+
+#ifdef PLOT_TRAIL
+    Pos pos = targetPos;
+    for (int sequence = 1;; ++sequence) {
+        Site& site = grid[pos.y][pos.x];
+        site.trailPlot.isOnTrail = true;
+        if (!site.steps) {
+            break;
+        }
+        pos = site.trailPlot.backtrace;
+    }
+    for (const auto& row : grid) {
+        for (const auto& site : row) {
+            std::cout << (site.trailPlot.isOnTrail ? site.trailPlot.height : '.');
+        }
+        std::cout << std::endl;
+    }
+#endif
+
     return grid[targetPos.y][targetPos.x].steps;
 }
 
