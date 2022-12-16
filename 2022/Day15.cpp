@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -68,6 +69,11 @@ int64_t solve2(std::ifstream input, const int range) {
     for (Pos sensor, beacon; input >> sensor >> beacon;) {
         ranges.emplace_back(sensor, l1norm(sensor, beacon));
     }
+
+    // Sort the sensors in the X-direction.
+    // This will make the sweeping faster because more sensors can be swept in a single loop.
+    std::sort(ranges.begin(), ranges.end(),
+              [](const auto& range1, const auto& range2) { return range1.first.x < range2.first.x; });
 
     for (int y = 0; y <= range; ++y) {
         for (int x = 0; x <= range;) {
