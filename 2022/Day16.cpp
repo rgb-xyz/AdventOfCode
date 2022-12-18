@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -92,7 +93,9 @@ std::vector<Node> process(std::ifstream input) {
         node.cost = costs[i];
         node.edges.reserve(validNodeCount);
         for (int j = 0; j < validNodeCount; ++j) {
-            node.edges.emplace_back(j, dists[i][j] + 1); // add 1 for opening the valve
+            if (i != j) {
+                node.edges.emplace_back(j, dists[i][j] + 1); // add 1 for opening the valve
+            }
         }
         std::sort(node.edges.begin(), node.edges.end(),
                   [](const Edge& edge1, const Edge& edge2) { return edge1.cost < edge2.cost; });
@@ -121,7 +124,8 @@ int solve1(std::ifstream input) {
     return getPressure(nodes, startIndex, startTime, 0);
 }
 
-int solve2(std::ifstream input) {
+// Brute-force solution with O(n!) complexity -- nicely readable by rather slow.
+int solve2_old(std::ifstream input) {
     const std::vector<Node> nodes = process(std::move(input));
     const int      startIndex = int(nodes.size()) - 1;
     const int      startTime  = 26;
@@ -132,6 +136,79 @@ int solve2(std::ifstream input) {
                              getPressure(nodes, startIndex, startTime, ~state);
         result = std::max(result, pressure);
 
+    }
+    return result;
+}
+
+// Dynamic programming solution with O(2^n*n^2) complexity -- much faster but very occluded.
+int solve2(std::ifstream input) {
+    constexpr int TIME      = 26;
+    constexpr int MAX_NODES = 15;
+    using Pressures = std::array<std::array<int, TIME>, MAX_NODES>;
+
+    const std::vector<Node> nodes      = process(std::move(input));
+    const int               nodeCount  = int(nodes.size()) - 1;
+    if (nodeCount > MAX_NODES) {
+        return -1;
+    }
+
+    // "pressures" and "flows" are indexed by a state bit-field specifying valves which *can be* opened.
+    const unsigned         stateCount = 1U << nodeCount;
+    std::vector<Pressures> pressures(stateCount);
+    std::vector<int>       flows(stateCount);
+    for (unsigned state = 0; state < stateCount; ++state) {
+        int flow = 0;
+        for (int i = 0; i < nodeCount; ++i) {
+            if (!(state & (1U << i))) {
+                flow += nodes[i].cost;
+            }
+        }
+        flows[state] = flow;
+    }
+
+    for (unsigned state = 0; state < stateCount; ++state) {
+        for (int nodeIndex = 0; nodeIndex < nodeCount; ++nodeIndex) {
+            const unsigned nodeBit = 1U << nodeIndex;
+            if (state & nodeBit) continue;
+            auto& pressure = pressures[state][nodeIndex];
+            const int flow = flows[state];
+            for (int t = 0; t < TIME; ++t) {
+                pressure[t] = flow * t;
+            }
+            const Node& node = nodes[nodeIndex];
+            for (const Edge& edge : node.edges) {
+                const unsigned subNodeBit = 1U << edge.node;
+                if (!(state & subNodeBit)) continue;
+                const unsigned subState = state & ~subNodeBit;
+                const auto& subPressure = pressures[subState][edge.node];
+                for (int t = edge.cost; t < TIME; ++t) {
+                    const int p = subPressure[t - edge.cost] + flow * edge.cost;
+                    pressure[t] = std::max(pressure[t], p);
+                }
+            }
+        }
+    }
+
+    int result = 0;
+    const unsigned stateMask = stateCount - 1;
+    for (const Edge& player1 : nodes.back().edges) {
+        const unsigned player1Bit = 1U << player1.node;
+        for (unsigned state2 = 0; state2 < stateCount / 2; ++state2) {
+            const unsigned state1 = state2 ^ stateMask;
+            if (!(state1 & player1Bit)) {
+                state2 += player1Bit - 1;
+                continue;
+            }
+            const int time1     = TIME - player1.cost;
+            const int pressure1 = pressures[state1 ^ player1Bit][player1.node][time1] - flows[state1] * time1;
+            for (const Edge& player2 : nodes.back().edges) {
+                const unsigned player2Bit = 1U << player2.node;
+                if (!(state2 & player2Bit)) continue;
+                const int time2     = TIME - player2.cost;
+                const int pressure2 = pressures[state2 ^ player2Bit][player2.node][time2] - flows[state2] * time2;
+                result = std::max(result, pressure1 + pressure2);
+            }
+        }
     }
     return result;
 }
