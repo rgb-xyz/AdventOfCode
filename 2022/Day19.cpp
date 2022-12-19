@@ -1,8 +1,26 @@
+#include <algorithm>
+#include <execution>
 #include <fstream>
 #include <iostream>
 #include <set>
 #include <sstream>
 #include <vector>
+
+static void printProgress(const int id, const int time) {
+    static std::mutex  mutex;
+    static std::string progress;
+
+    const std::unique_lock lock{ mutex };
+    if (progress.size() < id) {
+        progress.resize(id, ' ');
+    }
+    if (time >= 0) {
+        progress[id - 1] = 'P' - time;
+    } else {
+        progress[id - 1] = ' ';
+    }
+    std::cout << " :" << progress << '\r' << std::flush;
+}
 
 struct Blueprint {
     int     id{};
@@ -36,16 +54,19 @@ struct Blueprint {
         return bool(input);
     }
 
-    int getResult(const int time, const int delta) const {
+    int bestResult = 0;
+
+    void solve(const int time, const int delta) {
         using State = uint64_t;
-        using Queue = std::set<State, std::greater<State>>;
-        Queue queue;
-        queue.insert(1);
-        std::cout << "Solving #" << (id / 10) << (id % 10);
-        int bestResult = 0;
+        std::vector<State> queue;
+        queue.push_back(1);
         for (int t = 0; t < time; ++t) {
-            Queue next;
+            printProgress(id, t);
+            std::vector<State> next;
+            State lastState = 0;
             for (const State state : queue) {
+                if (state == lastState) continue;
+                lastState = state;
                 const uint8_t A = uint8_t(state >> 32);
                 const uint8_t B = uint8_t(state >> 40);
                 const uint8_t C = uint8_t(state >> 48);
@@ -53,47 +74,63 @@ struct Blueprint {
                 if (D + delta < bestResult) break;
                 const State newState = state + (state << 32);
                 if (A >= costD[0] && C >= costD[1]) {
-                    next.insert(newState + (1U << 24) - (State(costD[0]) << 32) - (State(costD[1]) << 48));
+                    next.push_back(newState + (1U << 24) - (State(costD[0]) << 32) - (State(costD[1]) << 48));
                     if (!delta) continue;
                 }
                 if (A >= costC[0] && B >= costC[1]) {
-                    next.insert(newState + (1U << 16) - (State(costC[0]) << 32) - (State(costC[1]) << 40));
+                    next.push_back(newState + (1U << 16) - (State(costC[0]) << 32) - (State(costC[1]) << 40));
                 }
                 if (A >= costB) {
-                    next.insert(newState + (1U << 8) - (State(costB) << 32));
+                    next.push_back(newState + (1U << 8) - (State(costB) << 32));
                 }
                 if (A >= costA) {
-                    next.insert(newState + 1U - (State(costA) << 32));
+                    next.push_back(newState + 1U - (State(costA) << 32));
                 }
-                next.insert(newState);
+                next.push_back(newState);
             }
             queue = std::move(next);
-            bestResult = int(*queue.begin() >> 56);
-            std::cout << ".";
+            std::sort(std::execution::par_unseq, queue.begin(), queue.end(), std::greater{});
+            bestResult = int(queue.front() >> 56);
         }
-        std::cout << " " << bestResult << std::endl;
-        return bestResult;
+        printProgress(id, -1);
     }
 };
 
 // ********************************************************************************************************
 
+// Note: MSVC's (parallelized) std::accumulate_reduce always executes at least 2 items on one thread.
+// This is not particularly useful for few expensive calculations. Instead, let's do parallel std::for_each
+// followed by sequential std::accumulate.
+
 int solve1(std::ifstream input) {
-    int result = 0;
+    std::vector<Blueprint> blueprints;
     for (Blueprint bp; bp.parse(input);) {
-        result += bp.getResult(24, 0) * bp.id;
+        blueprints.push_back(std::move(bp));
     }
-    return result;
+    std::for_each(
+        std::execution::par, blueprints.begin(), blueprints.end(),
+        [](Blueprint& bp) { bp.solve(24, 0); }
+    );
+    return std::accumulate(
+        blueprints.cbegin(), blueprints.cend(), 0, 
+        [](const int result, const Blueprint& bp) { return result + bp.bestResult * bp.id; }
+    );
 }
 
 int solve2(std::ifstream input) {
-    int count  = 0;
-    int result = 1;
+    std::vector<Blueprint> blueprints;
     for (Blueprint bp; bp.parse(input);) {
-        result *= bp.getResult(32, 2);
-        if (++count >= 3) break;
+        blueprints.push_back(std::move(bp));
+        if (blueprints.size() >= 3) break;
     }
-    return result;
+    std::for_each(
+        std::execution::par, blueprints.begin(), blueprints.end(),
+        [](Blueprint& bp) { bp.solve(32, 2); }
+    );
+    return std::accumulate(
+        blueprints.cbegin(), blueprints.cend(), 1, 
+        [](const int result, const Blueprint& bp) { return result * bp.bestResult; }
+    );
 }
 
 // ********************************************************************************************************
