@@ -10,6 +10,9 @@ int64_t solve(std::ifstream input, const int64_t multiplier, const int rounds) {
     for (int64_t data{}; input >> data;) {
         sequence.emplace_back(data * multiplier, sequence.size());
     }
+    // Exclude one because the front/back positions are equivalent in a circular buffer.
+    // Must be signed (!) because "signed % unsigned" is evaluated as "unsigned % unsigned"
+    // without any warning from MSVC. Thanks Microsoft!
     const int64_t ringSize = sequence.size() - 1;
     for (int round = 0; round < rounds; ++round) {
         for (size_t index = 0; index < sequence.size(); ++index) {
